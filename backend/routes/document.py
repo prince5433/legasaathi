@@ -19,7 +19,7 @@ log = logging.getLogger("legalsaathi.document")
 from database import get_documents_col
 from middleware.auth import verify_clerk
 from services.pdf_service import extract_text
-from services.s3_service import upload_pdf
+from services.s3_service import upload_pdf, presign_file_url
 from services.summarizer_service import summarize_document
 from services.risk_service import detect_risks
 from services.classifier_service import classify_document
@@ -104,7 +104,7 @@ async def upload_document(
     return {
         "docId": doc_id,
         "fileName": pdf.filename,
-        "fileUrl": file_url,
+        "fileUrl": presign_file_url(file_url),
         "summary": summary,
         "risks": risks,
         "docType": doc_type,
@@ -118,7 +118,13 @@ async def list_documents(user_id: str = Depends(verify_clerk)):
         {"userId": user_id},
         {"rawText": 0},
     ).sort("createdAt", -1).limit(50)
-    return [_serialise(d) async for d in cursor]
+    
+    docs = []
+    async for d in cursor:
+        if "fileUrl" in d:
+            d["fileUrl"] = presign_file_url(d["fileUrl"])
+        docs.append(_serialise(d))
+    return docs
 
 
 @router.get("/{doc_id}")
@@ -134,4 +140,8 @@ async def get_document(doc_id: str, user_id: str = Depends(verify_clerk)):
     )
     if not doc:
         raise HTTPException(404, "Document not found")
+    
+    if "fileUrl" in doc:
+        doc["fileUrl"] = presign_file_url(doc["fileUrl"])
+        
     return _serialise(doc)

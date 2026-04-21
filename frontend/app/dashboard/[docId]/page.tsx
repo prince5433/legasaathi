@@ -9,6 +9,7 @@ import { SummaryCard } from "@/components/SummaryCard";
 import { RiskList, Risk } from "@/components/RiskList";
 import { ChatInterface } from "@/components/ChatInterface";
 import { Button } from "@/components/ui/button";
+import { ArrowLeft, Scale } from "lucide-react";
 
 interface Doc {
   _id: string;
@@ -66,10 +67,18 @@ export default function DocumentDetailPage() {
 
   return (
     <div className="min-h-screen">
-      <nav className="border-b">
-        <div className="container flex h-16 items-center justify-between">
-          <Link href="/dashboard" className="text-xl font-bold">
-            ← LegalSaathi AI
+      <nav className="relative z-10 border-b border-white/10 bg-slate-950/50 backdrop-blur-md">
+        <div className="container mx-auto px-4 flex h-20 items-center justify-between">
+          <Link href="/dashboard" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+            <div className="bg-slate-800/50 p-2 rounded-xl border border-slate-700/50 hidden sm:flex">
+              <ArrowLeft className="w-5 h-5 text-slate-300" />
+            </div>
+            <div className="bg-amber-500/10 p-2 rounded-xl border border-amber-500/20">
+              <Scale className="w-6 h-6 text-amber-500" />
+            </div>
+            <span className="text-2xl font-extrabold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
+              LegalSaathi<span className="text-amber-500">.</span>
+            </span>
           </Link>
           <UserButton afterSignOutUrl="/" />
         </div>
@@ -86,7 +95,7 @@ export default function DocumentDetailPage() {
           <div className="grid gap-6 lg:grid-cols-5">
             <div className="space-y-6 lg:col-span-3">
               <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold">{doc.fileName}</h1>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">{doc.fileName}</h1>
                 {pdfHref && (
                   <a href={pdfHref} target="_blank" rel="noreferrer">
                     <Button variant="outline" size="sm">

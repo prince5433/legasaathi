@@ -8,8 +8,8 @@ export interface Risk {
 
 const severityStyle: Record<string, string> = {
   high: "border-destructive/40 bg-destructive/10 text-destructive",
-  medium: "border-yellow-500/40 bg-yellow-500/10 text-yellow-800",
-  low: "border-blue-500/40 bg-blue-500/10 text-blue-800",
+  medium: "border-amber-500/40 bg-amber-500/10 text-amber-500",
+  low: "border-blue-500/40 bg-blue-500/10 text-blue-400",
 };
 
 export function RiskList({ risks }: { risks: Risk[] }) {
