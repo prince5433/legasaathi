@@ -3,12 +3,72 @@
 from __future__ import annotations
 
 import logging
+from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException
+from database import get_documents_col
 from middleware.auth import verify_clerk
-from services.neo4j_service import get_driver
+from services.neo4j_service import extract_entities_llm, get_driver, store_entities
 
 log = logging.getLogger("legalsaathi.graph")
 router = APIRouter()
+
+
+async def _fetch_graph_rows(driver, doc_id: str) -> tuple[list[dict], dict]:
+    async with driver.session() as session:
+        result = await session.run(
+            """
+            MATCH (d:Document {id: $doc_id})
+            OPTIONAL MATCH (d)-[r]-(n)
+            OPTIONAL MATCH (n)-[r2]-(m)
+            WHERE m.id <> $doc_id AND m <> d
+            RETURN
+                d.id AS doc_id, d.type AS doc_type,
+                type(r) AS rel_type, labels(n)[0] AS node_label,
+                coalesce(n.name, n.id) AS node_name,
+                type(r2) AS rel2_type, labels(m)[0] AS m_label,
+                coalesce(m.name, m.id) AS m_name,
+                id(n) AS node_neo4j_id, id(m) AS m_neo4j_id
+            """,
+            doc_id=doc_id,
+        )
+        rows = [rec.data() async for rec in result]
+
+        count_result = await session.run(
+            """
+            MATCH (d:Document {id: $doc_id})-[]-(n)
+            OPTIONAL MATCH (n)-[r]-()
+            RETURN coalesce(n.name, n.id) AS name, labels(n)[0] AS label,
+                   count(r) AS connections
+            """,
+            doc_id=doc_id,
+        )
+        counts = {rec.data()["name"]: rec.data()["connections"]
+                  async for rec in count_result}
+
+    return rows, counts
+
+
+async def _rebuild_graph_if_missing(doc_id: str, user_id: str, rows: list[dict]) -> bool:
+    has_edges = any(row.get("node_name") for row in rows)
+    if has_edges:
+        return False
+
+    try:
+        oid = ObjectId(doc_id)
+    except Exception:
+        return False
+
+    doc = await get_documents_col().find_one(
+        {"_id": oid, "userId": user_id},
+        {"rawText": 1},
+    )
+    raw_text = (doc or {}).get("rawText", "").strip()
+    if not raw_text:
+        return False
+
+    entities = await extract_entities_llm(raw_text)
+    await store_entities(entities, doc_id)
+    return True
 
 
 @router.get("/{doc_id}")
@@ -17,38 +77,9 @@ async def get_document_graph(doc_id: str, user_id: str = Depends(verify_clerk)):
     driver = get_driver()
 
     try:
-        async with driver.session() as session:
-            # Get all nodes and relationships connected to this document
-            result = await session.run(
-                """
-                MATCH (d:Document {id: $doc_id})
-                OPTIONAL MATCH (d)-[r]-(n)
-                OPTIONAL MATCH (n)-[r2]-(m)
-                WHERE m.id <> $doc_id AND m <> d
-                RETURN
-                    d.id AS doc_id, d.type AS doc_type,
-                    type(r) AS rel_type, labels(n)[0] AS node_label,
-                    coalesce(n.name, n.id) AS node_name,
-                    type(r2) AS rel2_type, labels(m)[0] AS m_label,
-                    coalesce(m.name, m.id) AS m_name,
-                    id(n) AS node_neo4j_id, id(m) AS m_neo4j_id
-                """,
-                doc_id=doc_id,
-            )
-            rows = [rec.data() async for rec in result]
-
-            # Also get connection counts for sizing nodes
-            count_result = await session.run(
-                """
-                MATCH (d:Document {id: $doc_id})-[]-(n)
-                OPTIONAL MATCH (n)-[r]-()
-                RETURN coalesce(n.name, n.id) AS name, labels(n)[0] AS label,
-                       count(r) AS connections
-                """,
-                doc_id=doc_id,
-            )
-            counts = {rec.data()["name"]: rec.data()["connections"]
-                      async for rec in count_result}
+        rows, counts = await _fetch_graph_rows(driver, doc_id)
+        if await _rebuild_graph_if_missing(doc_id, user_id, rows):
+            rows, counts = await _fetch_graph_rows(driver, doc_id)
 
     except Exception as e:
         log.exception("Failed to query Neo4j graph for doc %s", doc_id)

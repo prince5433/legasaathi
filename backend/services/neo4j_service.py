@@ -37,19 +37,29 @@ def _strip_code_fence(text: str) -> str:
 
 
 async def extract_entities_llm(raw_text: str) -> dict:
-    """Ask the LLM for persons / sections / dates / doc_type as JSON."""
+    """Ask the LLM for graph entities as JSON."""
     prompt = (
-        "Extract entities from this Indian legal document. "
+        "Extract knowledge-graph entities from this Indian legal document. "
         "Respond with JSON only, no prose.\n"
-        'Format: {"persons":[],"sections":[],"dates":[],"doc_type":""}\n'
-        f"Document:\n{raw_text[:2500]}"
+        "Include contract parties, people, companies, legal sections, important clauses, dates, deadlines, "
+        "rent/deposit/penalty amounts, and document type when available.\n"
+        'Format: {"parties":[],"persons":[],"sections":[],"clauses":[],"dates":[],"amounts":[],"doc_type":""}\n'
+        f"Document:\n{raw_text[:4000]}"
     )
     resp = await ainvoke_with_fallback(prompt)
     content = resp.content if hasattr(resp, "content") else str(resp)
     try:
         return json.loads(_strip_code_fence(content))
     except json.JSONDecodeError:
-        return {"persons": [], "sections": [], "dates": [], "doc_type": ""}
+        return {
+            "parties": [],
+            "persons": [],
+            "sections": [],
+            "clauses": [],
+            "dates": [],
+            "amounts": [],
+            "doc_type": "",
+        }
 
 
 async def store_entities(entities: dict, doc_id: str) -> None:
@@ -61,6 +71,14 @@ async def store_entities(entities: dict, doc_id: str) -> None:
             doc_id=doc_id,
             doc_type=doc_type,
         )
+        for party in entities.get("parties") or []:
+            await session.run(
+                "MERGE (p:Party {name: $name}) "
+                "WITH p MATCH (d:Document {id: $doc_id}) "
+                "MERGE (d)-[:HAS_PARTY]->(p)",
+                name=party,
+                doc_id=doc_id,
+            )
         for person in entities.get("persons") or []:
             await session.run(
                 "MERGE (p:Person {name: $name}) "
@@ -75,6 +93,30 @@ async def store_entities(entities: dict, doc_id: str) -> None:
                 "WITH s MATCH (d:Document {id: $doc_id}) "
                 "MERGE (d)-[:CITES]->(s)",
                 section=section,
+                doc_id=doc_id,
+            )
+        for clause in entities.get("clauses") or []:
+            await session.run(
+                "MERGE (c:Section {name: $clause}) "
+                "WITH c MATCH (d:Document {id: $doc_id}) "
+                "MERGE (d)-[:HAS_CLAUSE]->(c)",
+                clause=clause,
+                doc_id=doc_id,
+            )
+        for date in entities.get("dates") or []:
+            await session.run(
+                "MERGE (dt:Date {name: $date}) "
+                "WITH dt MATCH (d:Document {id: $doc_id}) "
+                "MERGE (d)-[:HAS_DATE]->(dt)",
+                date=date,
+                doc_id=doc_id,
+            )
+        for amount in entities.get("amounts") or []:
+            await session.run(
+                "MERGE (a:Amount {name: $amount}) "
+                "WITH a MATCH (d:Document {id: $doc_id}) "
+                "MERGE (d)-[:HAS_AMOUNT]->(a)",
+                amount=amount,
                 doc_id=doc_id,
             )
 

@@ -1,12 +1,8 @@
-"""LangGraph ingestion pipeline — parse → classify → chunk+embed → entities.
-
-State is a TypedDict (matches the PiyushSirCode `lang_graph/graph.py` style).
-Entity extraction is a conditional branch: only run for FIR / court notices.
-"""
+"""LangGraph ingestion pipeline — parse → classify → chunk+embed → entities."""
 
 from __future__ import annotations
 
-from typing import Literal, TypedDict
+from typing import TypedDict
 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langgraph.graph import StateGraph, START, END
@@ -51,10 +47,6 @@ async def entity_extract_node(state: DocumentState) -> DocumentState:
     return {**state, "entities": entities}
 
 
-def should_extract_entities(state: DocumentState) -> Literal["extract", "skip"]:
-    return "extract" if state.get("doc_type") in {"fir", "notice"} else "skip"
-
-
 def _build() -> any:
     graph = StateGraph(DocumentState)
     graph.add_node("parse", parse_node)
@@ -65,11 +57,7 @@ def _build() -> any:
     graph.add_edge(START, "parse")
     graph.add_edge("parse", "classify")
     graph.add_edge("classify", "chunk")
-    graph.add_conditional_edges(
-        "chunk",
-        should_extract_entities,
-        {"extract": "extract_entities", "skip": END},
-    )
+    graph.add_edge("chunk", "extract_entities")
     graph.add_edge("extract_entities", END)
 
     return graph.compile()

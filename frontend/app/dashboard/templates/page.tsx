@@ -16,6 +16,7 @@ import {
   FileSignature,
   Loader2,
   Download,
+  FileDown,
   Check,
   ChevronRight,
   FileText,
@@ -50,6 +51,83 @@ interface TemplateType {
 }
 
 type Step = "select" | "fill" | "preview" | "done";
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function inlineMarkdown(value: string) {
+  return escapeHtml(value)
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/__(.+?)__/g, "<strong>$1</strong>")
+    .replace(/\*(.+?)\*/g, "<em>$1</em>");
+}
+
+function markdownToPrintableHtml(markdown: string) {
+  const html: string[] = [];
+  let listType: "ol" | "ul" | null = null;
+
+  const closeList = () => {
+    if (!listType) return;
+    html.push(`</${listType}>`);
+    listType = null;
+  };
+
+  markdown.replace(/\r\n/g, "\n").split("\n").forEach((rawLine) => {
+    const line = rawLine.trim();
+
+    if (!line) {
+      closeList();
+      html.push('<div class="doc-spacer"></div>');
+      return;
+    }
+
+    const heading = line.match(/^(#{1,3})\s+(.+)$/);
+    if (heading) {
+      closeList();
+      const level = heading[1].length;
+      html.push(`<h${level}>${inlineMarkdown(heading[2])}</h${level}>`);
+      return;
+    }
+
+    const numbered = line.match(/^(\d+)[.)]\s+(.+)$/);
+    if (numbered) {
+      if (listType !== "ol") {
+        closeList();
+        html.push("<ol>");
+        listType = "ol";
+      }
+      html.push(`<li>${inlineMarkdown(numbered[2])}</li>`);
+      return;
+    }
+
+    const bullet = line.match(/^[-*•]\s+(.+)$/);
+    if (bullet) {
+      if (listType !== "ul") {
+        closeList();
+        html.push("<ul>");
+        listType = "ul";
+      }
+      html.push(`<li>${inlineMarkdown(bullet[1])}</li>`);
+      return;
+    }
+
+    closeList();
+    html.push(`<p>${inlineMarkdown(line)}</p>`);
+  });
+
+  closeList();
+  return html.join("\n");
+}
+
+function startsWithMarkdownTitle(markdown: string) {
+  return /^#\s+.+/m.test(markdown.trimStart().split("\n")[0] || "");
+}
 
 export default function TemplatesPage() {
   const api = useApi();
@@ -108,6 +186,96 @@ export default function TemplatesPage() {
     a.download = `${generatedTitle.replace(/\s+/g, "_")}.md`;
     a.click();
     URL.revokeObjectURL(url);
+  }, [generatedContent, generatedTitle]);
+
+  const downloadAsPdf = useCallback(() => {
+    const iframe = document.createElement("iframe");
+    iframe.style.position = "fixed";
+    iframe.style.right = "0";
+    iframe.style.bottom = "0";
+    iframe.style.width = "0";
+    iframe.style.height = "0";
+    iframe.style.border = "0";
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (!doc) {
+      iframe.remove();
+      return;
+    }
+
+    doc.open();
+    const hasTitleInContent = startsWithMarkdownTitle(generatedContent);
+    doc.write(`
+      <!doctype html>
+      <html>
+        <head>
+          <title>${escapeHtml(generatedTitle || "Legal Document")}</title>
+          <style>
+            @page { size: A4; margin: 22mm 18mm; }
+            * { box-sizing: border-box; }
+            body {
+              margin: 0;
+              color: #111827;
+              font-family: "Nirmala UI", "Mangal", "Noto Sans Devanagari", Arial, sans-serif;
+              font-size: 11.5pt;
+              line-height: 1.62;
+              letter-spacing: 0;
+            }
+            h1, h2, h3 {
+              font-family: "Nirmala UI", "Mangal", "Noto Sans Devanagari", Arial, sans-serif;
+              color: #111827;
+              line-height: 1.25;
+              font-weight: 700;
+              page-break-after: avoid;
+            }
+            h1 {
+              text-align: center;
+              font-size: 16pt;
+              text-transform: uppercase;
+              border-bottom: 1px solid #9ca3af;
+              padding-bottom: 12px;
+              margin: 0 0 22px;
+            }
+            h2 { font-size: 13pt; margin: 18px 0 9px; }
+            h3 { font-size: 12pt; margin: 14px 0 7px; }
+            p {
+              margin: 0 0 10px;
+              white-space: pre-wrap;
+              overflow-wrap: anywhere;
+            }
+            ol, ul {
+              margin: 0 0 14px 22px;
+              padding: 0;
+            }
+            li {
+              margin: 0 0 5px;
+              padding-left: 5px;
+            }
+            strong { font-weight: 700; }
+            .doc-spacer { height: 10px; }
+            .footer {
+              margin-top: 32px;
+              padding-top: 10px;
+              border-top: 1px solid #e5e7eb;
+              color: #6b7280;
+              font: 9pt Arial, sans-serif;
+              text-align: center;
+            }
+          </style>
+        </head>
+        <body>
+          ${hasTitleInContent ? "" : `<h1>${escapeHtml(generatedTitle || "Legal Document")}</h1>`}
+          ${markdownToPrintableHtml(generatedContent)}
+          <div class="footer">Generated by LegalSaathi</div>
+        </body>
+      </html>
+    `);
+    doc.close();
+
+    iframe.contentWindow?.focus();
+    iframe.contentWindow?.print();
+    window.setTimeout(() => iframe.remove(), 1000);
   }, [generatedContent, generatedTitle]);
 
   const copyToClipboard = useCallback(() => {
@@ -303,7 +471,7 @@ export default function TemplatesPage() {
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-white">{generatedTitle}</h2>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2 justify-end">
                 <Button variant="outline" size="sm" onClick={copyToClipboard}>
                   {step === "done" ? (
                     <>
@@ -318,6 +486,10 @@ export default function TemplatesPage() {
                   <Download className="w-4 h-4 mr-1" />
                   Download .md
                 </Button>
+                <Button variant="outline" size="sm" onClick={downloadAsPdf}>
+                  <FileDown className="w-4 h-4 mr-1" />
+                  Download PDF
+                </Button>
                 <Button
                   size="sm"
                   onClick={resetWizard}
@@ -328,13 +500,27 @@ export default function TemplatesPage() {
               </div>
             </div>
 
-            <Card className="bg-white/[0.02] border-slate-800">
-              <CardContent className="pt-6">
-                <div className="prose prose-sm max-w-none prose-invert prose-headings:text-white prose-p:text-slate-300 prose-strong:text-white prose-li:text-slate-300">
-                  <ReactMarkdown>{generatedContent}</ReactMarkdown>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="legal-document-shell">
+              <article className="legal-document-page">
+                {!startsWithMarkdownTitle(generatedContent) && (
+                  <h1>{generatedTitle || "Legal Document"}</h1>
+                )}
+                <ReactMarkdown
+                  components={{
+                    h1: ({ children }) => <h1>{children}</h1>,
+                    h2: ({ children }) => <h2>{children}</h2>,
+                    h3: ({ children }) => <h3>{children}</h3>,
+                    p: ({ children }) => <p>{children}</p>,
+                    ol: ({ children }) => <ol>{children}</ol>,
+                    ul: ({ children }) => <ul>{children}</ul>,
+                    li: ({ children }) => <li>{children}</li>,
+                    strong: ({ children }) => <strong>{children}</strong>,
+                  }}
+                >
+                  {generatedContent}
+                </ReactMarkdown>
+              </article>
+            </div>
           </div>
         )}
       </main>

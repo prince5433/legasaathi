@@ -71,3 +71,92 @@
   0% { transform: scaleY(0.4); }
   100% { transform: scaleY(1); }
 }
+
+/* ── Legal Template Preview / PDF Styling ── */
+.legal-document-shell {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid rgb(30 41 59);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgb(15 23 42 / 0.9), rgb(2 6 23 / 0.95));
+  padding: 24px;
+}
+
+.legal-document-page {
+  width: min(100%, 794px);
+  min-height: 1123px;
+  margin: 0 auto;
+  padding: 72px 68px;
+  background: #ffffff;
+  color: #111827;
+  box-shadow: 0 24px 70px rgb(0 0 0 / 0.35);
+  font-family: "Nirmala UI", "Mangal", "Noto Sans Devanagari", Arial, sans-serif;
+  font-size: 15.5px;
+  line-height: 1.62;
+  letter-spacing: 0;
+}
+
+.legal-document-page h1,
+.legal-document-page h2,
+.legal-document-page h3 {
+  color: #111827;
+  font-family: "Nirmala UI", "Mangal", "Noto Sans Devanagari", Arial, sans-serif;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: 0;
+}
+
+.legal-document-page h1 {
+  margin: 0 0 28px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #9ca3af;
+  text-align: center;
+  text-transform: uppercase;
+  font-size: 22px;
+}
+
+.legal-document-page h2 {
+  margin: 24px 0 10px;
+  font-size: 18px;
+}
+
+.legal-document-page h3 {
+  margin: 18px 0 8px;
+  font-size: 16px;
+}
+
+.legal-document-page p {
+  margin: 0 0 13px;
+  color: #111827;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.legal-document-page ol,
+.legal-document-page ul {
+  margin: 0 0 16px 26px;
+  padding: 0;
+  color: #111827;
+}
+
+.legal-document-page li {
+  margin: 0 0 6px;
+  padding-left: 6px;
+}
+
+.legal-document-page strong {
+  font-weight: 700;
+}
+
+@media (max-width: 720px) {
+  .legal-document-shell {
+    padding: 12px;
+  }
+
+  .legal-document-page {
+    min-height: auto;
+    padding: 36px 28px;
+    font-size: 14px;
+  }
+}
