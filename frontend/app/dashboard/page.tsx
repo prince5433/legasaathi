@@ -4,13 +4,15 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { UserButton } from "@clerk/nextjs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Scale, GitCompareArrows, FileSignature, ArrowRight } from "lucide-react";
+import { Scale, GitCompareArrows, FileSignature, ArrowRight, Trash2, Loader2 } from "lucide-react";
 import { DocumentUploader, UploadResult } from "@/components/DocumentUploader";
 import { useApi } from "@/lib/api";
+import { Button } from "@/components/ui/button";
 
 interface DocSummary {
   _id: string;
   fileName: string;
+  fileType?: string;
   docType: string;
   status: string;
   summary?: string;
@@ -21,6 +23,8 @@ export default function DashboardPage() {
   const api = useApi();
   const [docs, setDocs] = useState<DocSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -41,6 +45,25 @@ export default function DashboardPage() {
       refresh();
     },
     [refresh],
+  );
+
+  const deleteDocument = useCallback(
+    async (docId: string) => {
+      if (confirmDeleteId !== docId) {
+        setConfirmDeleteId(docId);
+        return;
+      }
+
+      setDeletingId(docId);
+      try {
+        await api.delete(`/api/documents/${docId}`);
+        setDocs((current) => current.filter((doc) => doc._id !== docId));
+        setConfirmDeleteId(null);
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    [api, confirmDeleteId],
   );
 
   return (
@@ -95,7 +118,7 @@ export default function DashboardPage() {
         <section>
           <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">Naya document upload karein</h1>
           <p className="mt-2 text-slate-400">
-            PDF chunk ho kar Qdrant mein jaayega, entities Neo4j mein, aur Hindi summary + risks milenge.
+            PDF ya image OCR ke baad chunk hokar Qdrant mein jaayega, entities Neo4j mein, aur Hindi + English summary milegi.
           </p>
           <div className="mt-6">
             <DocumentUploader onUploaded={onUploaded} />
@@ -110,15 +133,43 @@ export default function DashboardPage() {
             <p className="mt-4 text-sm text-slate-400">Abhi koi document nahi hai.</p>
           ) : (
             <div className="mt-4 grid gap-4 md:grid-cols-2">
-              {docs.map((d) => (
-                <Link key={d._id} href={`/dashboard/${d._id}`}>
-                  <Card className="bg-slate-900/50 border-slate-800 backdrop-blur-sm transition-colors hover:border-amber-500/50 group">
+              {docs.map((d) => {
+                const confirming = confirmDeleteId === d._id;
+                const deleting = deletingId === d._id;
+
+                return (
+                <Link key={d._id} href={`/dashboard/${d._id}`} onMouseLeave={() => confirming && setConfirmDeleteId(null)}>
+                  <Card className="relative bg-slate-900/50 border-slate-800 backdrop-blur-sm transition-colors hover:border-amber-500/50 group">
                     <CardHeader>
-                      <CardTitle className="flex items-center justify-between text-base">
+                      <CardTitle className="flex items-start justify-between gap-3 text-base">
                         <span className="truncate text-white group-hover:text-amber-400 transition-colors">{d.fileName}</span>
-                        <span className="rounded-full bg-slate-800 px-3 py-1 text-xs uppercase text-slate-300 border border-slate-700">
-                          {d.docType || "other"}
-                        </span>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <span className="rounded-full bg-slate-800 px-3 py-1 text-xs uppercase text-slate-300 border border-slate-700">
+                            {d.fileType?.startsWith("image/") ? "image" : d.docType || "other"}
+                          </span>
+                          <Button
+                            type="button"
+                            variant={confirming ? "destructive" : "ghost"}
+                            size="sm"
+                            disabled={deleting}
+                            title={confirming ? "Click again to delete" : "Delete document"}
+                            className={`h-8 px-2 ${confirming ? "" : "text-slate-500 hover:text-red-300 hover:bg-red-500/10"}`}
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              deleteDocument(d._id);
+                            }}
+                          >
+                            {deleting ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <>
+                                <Trash2 className="h-4 w-4" />
+                                {confirming && <span className="ml-1 hidden sm:inline">Confirm</span>}
+                              </>
+                            )}
+                          </Button>
+                        </div>
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -128,7 +179,8 @@ export default function DashboardPage() {
                     </CardContent>
                   </Card>
                 </Link>
-              ))}
+                );
+              })}
             </div>
           )}
         </section>

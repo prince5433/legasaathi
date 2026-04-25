@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, VectorParams
+from qdrant_client.models import Distance, FieldCondition, Filter, MatchValue, VectorParams
 from langchain_qdrant import QdrantVectorStore
 
 from config import settings
@@ -59,3 +59,18 @@ async def search_similar(query: str, doc_id: str | None = None, k: int = 4):
         # `filter` in langchain-qdrant supports a plain dict for equality matches
         return await store.asimilarity_search(query, k=k, filter={"doc_id": doc_id})
     return await store.asimilarity_search(query, k=k)
+
+
+async def delete_document_chunks(doc_id: str) -> None:
+    client = get_client()
+    client.delete(
+        collection_name=settings.QDRANT_COLLECTION,
+        points_selector=Filter(
+            must=[
+                FieldCondition(
+                    key="metadata.doc_id",
+                    match=MatchValue(value=doc_id),
+                )
+            ]
+        ),
+    )

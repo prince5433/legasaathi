@@ -25,6 +25,8 @@ class DocumentState(TypedDict, total=False):
 
 
 def parse_node(state: DocumentState) -> DocumentState:
+    if state.get("raw_text"):
+        return state
     text = extract_text(state["file_bytes"])
     return {**state, "raw_text": text}
 

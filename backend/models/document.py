@@ -28,6 +28,7 @@ class DocumentOut(BaseModel):
     userId: str
     fileName: str
     fileUrl: str
+    fileType: str = ""
     summary: str = ""
     risks: list[RiskItem] = []
     docType: DocType = DocType.other

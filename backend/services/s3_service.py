@@ -1,4 +1,4 @@
-"""Upload PDFs to AWS S3, or fall back to on-disk storage if AWS is unset.
+"""Upload documents to AWS S3, or fall back to on-disk storage if AWS is unset.
 
 Writing locally means the API can be exercised end-to-end before the user
 provisions S3 credentials. The local URL uses `/local-files/...` so the
@@ -31,7 +31,12 @@ def _s3_client():
     )
 
 
-async def upload_pdf(file_bytes: bytes, filename: str, user_id: str) -> str:
+async def upload_file(
+    file_bytes: bytes,
+    filename: str,
+    user_id: str,
+    content_type: str = "application/octet-stream",
+) -> str:
     """Return a URL at which the uploaded file can be referenced."""
     key = f"documents/{user_id}/{filename}"
 
@@ -41,7 +46,7 @@ async def upload_pdf(file_bytes: bytes, filename: str, user_id: str) -> str:
             Bucket=settings.AWS_S3_BUCKET,
             Key=key,
             Body=file_bytes,
-            ContentType="application/pdf",
+            ContentType=content_type,
         )
         return f"https://{settings.AWS_S3_BUCKET}.s3.{settings.AWS_REGION}.amazonaws.com/{key}"
 
@@ -52,6 +57,10 @@ async def upload_pdf(file_bytes: bytes, filename: str, user_id: str) -> str:
     out_path.write_bytes(file_bytes)
     rel = f"{user_id}/{quote(filename)}"
     return f"/local-files/{rel}"
+
+
+async def upload_pdf(file_bytes: bytes, filename: str, user_id: str) -> str:
+    return await upload_file(file_bytes, filename, user_id, "application/pdf")
 
 
 def get_presigned_url(key: str, expiry_s: int = 3600) -> str:

@@ -16,16 +16,18 @@ from slowapi.util import get_remote_address
 
 log = logging.getLogger("legalsaathi.document")
 
-from database import get_documents_col
+from database import get_chats_col, get_documents_col
 from middleware.auth import verify_clerk
-from services.pdf_service import extract_text
-from services.s3_service import upload_pdf, presign_file_url
+from services.pdf_service import IMAGE_CONTENT_TYPES, PDF_CONTENT_TYPES, extract_upload_text
+from services.s3_service import upload_file, presign_file_url
 from services.summarizer_service import summarize_document
 from services.risk_service import detect_risks
 from services.classifier_service import classify_document
 from services.langgraph_pipeline import pipeline
 from services.timeline_service import extract_timeline
 from services.comparison_service import compare_documents
+from services.neo4j_service import get_driver
+from services.qdrant_service import delete_document_chunks
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
@@ -45,24 +47,28 @@ async def upload_document(
     pdf: UploadFile = File(...),
     user_id: str = Depends(verify_clerk),
 ):
-    if pdf.content_type not in {"application/pdf", "application/x-pdf"}:
-        raise HTTPException(400, "Only PDF files are accepted")
+    allowed_types = PDF_CONTENT_TYPES | IMAGE_CONTENT_TYPES
+    content_type = pdf.content_type or ""
+    if content_type not in allowed_types:
+        raise HTTPException(400, "Only PDF or image files (PNG, JPG, JPEG, WEBP) are accepted")
 
     contents = await pdf.read()
     if not contents:
         raise HTTPException(400, "Empty file")
 
-    file_url = await upload_pdf(contents, pdf.filename, user_id)
-    raw_text = extract_text(contents)
+    filename = pdf.filename or "uploaded-document"
+    file_url = await upload_file(contents, filename, user_id, content_type)
+    raw_text = await extract_upload_text(contents, content_type)
     if not raw_text:
-        raise HTTPException(422, "Could not extract text from this PDF")
+        raise HTTPException(422, "Could not extract readable text from this file")
 
     # Insert first to get a real ObjectId — avoids the v5 doc_id='temp' bug
     col = get_documents_col()
     insert_result = await col.insert_one({
         "userId": user_id,
-        "fileName": pdf.filename,
+        "fileName": filename,
         "fileUrl": file_url,
+        "fileType": content_type,
         "rawText": raw_text,
         "status": "processing",
         "createdAt": datetime.utcnow(),
@@ -99,14 +105,16 @@ async def upload_document(
             "summary": summary,
             "risks": risks,
             "docType": doc_type,
+            "fileType": content_type,
             "status": "done",
         }},
     )
 
     return {
         "docId": doc_id,
-        "fileName": pdf.filename,
+        "fileName": filename,
         "fileUrl": presign_file_url(file_url),
+        "fileType": content_type,
         "summary": summary,
         "risks": risks,
         "docType": doc_type,
@@ -147,6 +155,47 @@ async def get_document(doc_id: str, user_id: str = Depends(verify_clerk)):
         doc["fileUrl"] = presign_file_url(doc["fileUrl"])
         
     return _serialise(doc)
+
+
+@router.delete("/{doc_id}")
+async def delete_document(doc_id: str, user_id: str = Depends(verify_clerk)):
+    try:
+        oid = ObjectId(doc_id)
+    except Exception:
+        raise HTTPException(400, "Invalid document id")
+
+    col = get_documents_col()
+    result = await col.delete_one({"_id": oid, "userId": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(404, "Document not found")
+
+    await get_chats_col().delete_one({"userId": user_id, "documentId": doc_id})
+
+    try:
+        await delete_document_chunks(doc_id)
+    except Exception:
+        log.exception("Qdrant cleanup failed for deleted doc %s", doc_id)
+
+    try:
+        driver = get_driver()
+        async with driver.session() as session:
+            await session.run(
+                """
+                MATCH (d:Document {id: $doc_id})
+                OPTIONAL MATCH (d)--(n)
+                DETACH DELETE d
+                WITH collect(n) AS neighbours
+                UNWIND neighbours AS n
+                WITH n
+                WHERE n IS NOT NULL AND NOT (n)--()
+                DETACH DELETE n
+                """,
+                doc_id=doc_id,
+            )
+    except Exception:
+        log.exception("Neo4j cleanup failed for deleted doc %s", doc_id)
+
+    return {"deleted": True, "docId": doc_id}
 
 
 @router.get("/{doc_id}/timeline")

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 export interface UploadResult {
   docId: string;
   fileName: string;
+  fileType?: string;
   summary: string;
   docType: string;
 }
@@ -42,7 +43,12 @@ export function DocumentUploader({ onUploaded }: { onUploaded: (r: UploadResult)
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: { "application/pdf": [".pdf"] },
+    accept: {
+      "application/pdf": [".pdf"],
+      "image/png": [".png"],
+      "image/jpeg": [".jpg", ".jpeg"],
+      "image/webp": [".webp"],
+    },
     multiple: false,
     disabled: busy,
   });
@@ -59,13 +65,13 @@ export function DocumentUploader({ onUploaded }: { onUploaded: (r: UploadResult)
         {busy ? (
           <div className="flex flex-col items-center gap-2">
             <Loader2 className="h-10 w-10 animate-spin" />
-            <p>Processing PDF… yeh 20-30 second le sakta hai.</p>
+            <p>Processing document… images mein OCR ki wajah se thoda time lag sakta hai.</p>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-2">
             <Upload className="h-10 w-10" />
-            <p className="font-medium">PDF drop karein ya click karein</p>
-            <p className="text-sm text-muted-foreground">Max 10 MB • rent / FIR / notice / employment</p>
+            <p className="font-medium">PDF ya image drop karein ya click karein</p>
+            <p className="text-sm text-muted-foreground">PDF, PNG, JPG, WEBP • OCR + chunking + chat supported</p>
           </div>
         )}
       </div>

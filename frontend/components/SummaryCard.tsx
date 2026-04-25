@@ -6,7 +6,7 @@ export function SummaryCard({ summary, docType }: { summary: string; docType?: s
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
-          <span>Summary</span>
+          <span>Summary (Hindi + English)</span>
           {docType && (
             <span className="rounded-full bg-muted px-3 py-1 text-xs font-normal uppercase">
               {docType}

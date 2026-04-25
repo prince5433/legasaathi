@@ -17,6 +17,7 @@ interface Doc {
   _id: string;
   fileName: string;
   fileUrl: string;
+  fileType?: string;
   docType: string;
   status: string;
   summary: string;
@@ -74,7 +75,7 @@ export default function DocumentDetailPage() {
     };
   }, [api, docId]);
 
-  const pdfHref = absoluteFileUrl(doc?.fileUrl);
+  const fileHref = absoluteFileUrl(doc?.fileUrl);
 
   return (
     <div className="min-h-screen">
@@ -107,10 +108,10 @@ export default function DocumentDetailPage() {
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
               <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">{doc.fileName}</h1>
-              {pdfHref && (
-                <a href={pdfHref} target="_blank" rel="noreferrer">
+              {fileHref && (
+                <a href={fileHref} target="_blank" rel="noreferrer">
                   <Button variant="outline" size="sm">
-                    PDF kholein
+                    File kholein
                   </Button>
                 </a>
               )}
