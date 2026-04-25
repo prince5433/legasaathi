@@ -8,6 +8,10 @@ from __future__ import annotations
 
 import json
 import logging
+import re
+
+from langchain_qdrant import QdrantVectorStore
+from qdrant_client.models import Distance, VectorParams
 
 from services.llm_service import ainvoke_with_fallback, get_embeddings
 from services.qdrant_service import get_client
@@ -138,6 +142,103 @@ AVAILABLE_STATES = [
 ]
 
 
+def _normalise_state(state: str | None) -> str:
+    return (state or "").strip().lower().replace(" ", "_").replace("-", "_")
+
+
+def resolve_state_key(state: str | None, question: str = "") -> str | None:
+    state_key = _normalise_state(state)
+    if state_key in STATE_LAW_DATA:
+        return state_key
+
+    question_norm = _normalise_state(question)
+    for key, data in STATE_LAW_DATA.items():
+        state_name = _normalise_state(data["state"])
+        if key in question_norm or state_name in question_norm:
+            return key
+
+    aliases = {
+        "up": "uttar_pradesh",
+        "u_p": "uttar_pradesh",
+        "mp": "madhya_pradesh",
+        "m_p": "madhya_pradesh",
+    }
+    for alias, key in aliases.items():
+        if re.search(rf"(^|_){re.escape(alias)}(_|$)", question_norm):
+            return key
+
+    return None
+
+
+def _state_law_texts() -> tuple[list[str], list[dict]]:
+    texts: list[str] = []
+    metadatas: list[dict] = []
+    for state_key, state_data in STATE_LAW_DATA.items():
+        for i, law in enumerate(state_data["laws"]):
+            texts.append(
+                f"State: {state_data['state']}\n"
+                f"Law: {law['name']}\n"
+                f"Topics: {', '.join(law['topics'])}\n"
+                f"Summary: {law['summary']}"
+            )
+            metadatas.append({
+                "state": state_key,
+                "law_name": law["name"],
+                "chunk_index": i,
+            })
+    return texts, metadatas
+
+
+async def ensure_state_law_collection() -> None:
+    client = get_client()
+    existing = {c.name for c in client.get_collections().collections}
+    if STATE_LAWS_COLLECTION not in existing:
+        client.create_collection(
+            collection_name=STATE_LAWS_COLLECTION,
+            vectors_config=VectorParams(
+                size=settings.EMBEDDING_DIM,
+                distance=Distance.COSINE,
+            ),
+        )
+
+    count = client.count(collection_name=STATE_LAWS_COLLECTION, exact=True).count
+    if count:
+        return
+
+    texts, metadatas = _state_law_texts()
+    store = QdrantVectorStore(
+        client=client,
+        collection_name=STATE_LAWS_COLLECTION,
+        embedding=get_embeddings(),
+    )
+    await store.aadd_texts(texts, metadatas=metadatas)
+
+
+async def search_state_law_context(question: str, state: str | None, k: int = 4) -> str:
+    state_key = resolve_state_key(state, question)
+    if not state_key:
+        return ""
+
+    try:
+        await ensure_state_law_collection()
+        store = QdrantVectorStore(
+            client=get_client(),
+            collection_name=STATE_LAWS_COLLECTION,
+            embedding=get_embeddings(),
+        )
+        docs = await store.asimilarity_search(
+            question,
+            k=k,
+            filter={"state": state_key},
+        )
+        if docs:
+            return "\n\n".join(d.page_content for d in docs)
+    except Exception:
+        log.exception("State law Qdrant search failed; falling back to local law data")
+
+    return await get_state_context(question, state_key)
+
+
 async def detect_state_from_text(raw_text: str) -> str | None:
     """Use LLM to detect which Indian state a legal document pertains to."""
     prompt = (
@@ -162,7 +263,7 @@ async def get_state_context(question: str, state: str) -> str:
     Searches the in-memory state law database for relevant laws
     based on the question topic.
     """
-    state_data = STATE_LAW_DATA.get(state)
+    state_data = STATE_LAW_DATA.get(_normalise_state(state))
     if not state_data:
         return ""
 

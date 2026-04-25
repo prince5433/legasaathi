@@ -25,6 +25,7 @@ from routes import template as template_routes
 from routes import jurisdiction as jurisdiction_routes
 from services.neo4j_service import close_driver as neo4j_close
 from services.qdrant_service import init_collection as qdrant_init
+from services.jurisdiction_service import ensure_state_law_collection
 
 logging.basicConfig(
     level=logging.INFO,
@@ -40,6 +41,7 @@ async def lifespan(app: FastAPI):
     await connect_db()
     try:
         qdrant_init()
+        await ensure_state_law_collection()
     except Exception as e:
         log.warning("Qdrant init skipped: %r", e)
     yield

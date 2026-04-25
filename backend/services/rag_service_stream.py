@@ -15,6 +15,8 @@ from services.qdrant_service import search_similar
 from services.neo4j_service import get_related_context
 from services.memory_service import get_memory, save_memory
 from services.rag_context import OUT_OF_CONTEXT, build_document_prompt, load_document_context
+from services.relevance_service import classify_document_relevance
+from services.jurisdiction_service import search_state_law_context
 
 log = logging.getLogger("legalsaathi.rag_stream")
 
@@ -68,10 +70,29 @@ async def answer_query_stream(
     if state:
         yield _sse("status", {"message": f"{state.title()} ke kanoon dekh raha hoon..." if language == "hindi" else f"Checking {state.title()} laws..."})
         try:
-            from services.jurisdiction_service import get_state_context
-            jurisdiction_ctx = await get_state_context(question, state)
+            jurisdiction_ctx = await search_state_law_context(question, state, k=4)
         except Exception:
             log.exception("Jurisdiction service failed; continuing without state context")
+
+    yield _sse("status", {"message": "Sawaal ka document se relation check kar raha hoon..." if language == "hindi" else "Checking document relevance..."})
+    classifier_doc_ctx = qdrant_ctx or raw_text[:12000]
+    relevance = await classify_document_relevance(
+        question=question,
+        document_context=classifier_doc_ctx,
+        jurisdiction_context=jurisdiction_ctx,
+    )
+    if not relevance["is_relevant"]:
+        answer = OUT_OF_CONTEXT.get(language, OUT_OF_CONTEXT["hindi"])
+        yield _sse("token", {"content": answer})
+        yield _sse("done", {"full_answer": answer})
+        save_memory(
+            user_id,
+            [
+                {"role": "user", "content": question},
+                {"role": "assistant", "content": answer},
+            ],
+        )
+        return
 
     # ── Step 5: Build prompt ──
     prompt = build_document_prompt(
