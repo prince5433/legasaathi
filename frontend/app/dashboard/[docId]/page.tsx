@@ -8,8 +8,10 @@ import { apiUrl, useApi } from "@/lib/api";
 import { SummaryCard } from "@/components/SummaryCard";
 import { RiskList, Risk } from "@/components/RiskList";
 import { ChatInterface } from "@/components/ChatInterface";
+import { KnowledgeGraph } from "@/components/KnowledgeGraph";
+import { DocumentTimeline } from "@/components/DocumentTimeline";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Scale } from "lucide-react";
+import { ArrowLeft, Scale, FileText, Network, Clock } from "lucide-react";
 
 interface Doc {
   _id: string;
@@ -27,11 +29,20 @@ function absoluteFileUrl(url: string | undefined): string | undefined {
   return url;
 }
 
+type TabKey = "summary" | "graph" | "timeline";
+
+const tabs: { key: TabKey; label: string; icon: React.ReactNode }[] = [
+  { key: "summary", label: "Summary & Risks", icon: <FileText className="w-4 h-4" /> },
+  { key: "graph", label: "Knowledge Graph", icon: <Network className="w-4 h-4" /> },
+  { key: "timeline", label: "Timeline", icon: <Clock className="w-4 h-4" /> },
+];
+
 export default function DocumentDetailPage() {
   const { docId } = useParams<{ docId: string }>();
   const api = useApi();
   const [doc, setDoc] = useState<Doc | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<TabKey>("summary");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -92,30 +103,64 @@ export default function DocumentDetailPage() {
         )}
         {!doc && !error && <p className="text-sm text-muted-foreground">Loading document…</p>}
         {doc && (
-          <div className="grid gap-6 lg:grid-cols-5">
-            <div className="space-y-6 lg:col-span-3">
-              <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">{doc.fileName}</h1>
-                {pdfHref && (
-                  <a href={pdfHref} target="_blank" rel="noreferrer">
-                    <Button variant="outline" size="sm">
-                      PDF kholein
-                    </Button>
-                  </a>
+          <>
+            {/* Header */}
+            <div className="flex items-center justify-between mb-6">
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">{doc.fileName}</h1>
+              {pdfHref && (
+                <a href={pdfHref} target="_blank" rel="noreferrer">
+                  <Button variant="outline" size="sm">
+                    PDF kholein
+                  </Button>
+                </a>
+              )}
+            </div>
+
+            {doc.status === "processing" && (
+              <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground mb-6">
+                Analysis chal raha hai… 10-30 second.
+              </div>
+            )}
+
+            {/* Tab Navigation */}
+            <div className="flex gap-1 mb-6 p-1 bg-slate-900/50 rounded-lg border border-slate-800 w-fit">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                    activeTab === tab.key
+                      ? "bg-amber-500/10 text-amber-500 border border-amber-500/20 shadow-sm"
+                      : "text-slate-400 hover:text-white hover:bg-slate-800/50"
+                  }`}
+                >
+                  {tab.icon}
+                  <span className="hidden sm:inline">{tab.label}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Tab Content + Chat */}
+            <div className="grid gap-6 lg:grid-cols-5">
+              <div className="space-y-6 lg:col-span-3">
+                {activeTab === "summary" && (
+                  <>
+                    <SummaryCard summary={doc.summary} docType={doc.docType} />
+                    <RiskList risks={doc.risks || []} />
+                  </>
+                )}
+                {activeTab === "graph" && (
+                  <KnowledgeGraph documentId={doc._id} />
+                )}
+                {activeTab === "timeline" && (
+                  <DocumentTimeline documentId={doc._id} />
                 )}
               </div>
-              {doc.status === "processing" && (
-                <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
-                  Analysis chal raha hai… 10-30 second.
-                </div>
-              )}
-              <SummaryCard summary={doc.summary} docType={doc.docType} />
-              <RiskList risks={doc.risks || []} />
+              <div className="lg:col-span-2">
+                <ChatInterface documentId={doc._id} />
+              </div>
             </div>
-            <div className="lg:col-span-2">
-              <ChatInterface documentId={doc._id} />
-            </div>
-          </div>
+          </>
         )}
       </main>
     </div>

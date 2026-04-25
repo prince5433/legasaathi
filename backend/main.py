@@ -20,6 +20,9 @@ from config import settings
 from database import close_db, connect_db
 from routes import chat as chat_routes
 from routes import document as document_routes
+from routes import graph as graph_routes
+from routes import template as template_routes
+from routes import jurisdiction as jurisdiction_routes
 from services.neo4j_service import close_driver as neo4j_close
 from services.qdrant_service import init_collection as qdrant_init
 
@@ -54,7 +57,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.FRONTEND_URL, "http://localhost:3000"],
+    allow_origins=[settings.FRONTEND_URL, "http://localhost:3000", "http://localhost:3001"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -76,6 +79,9 @@ app.mount("/local-files", StaticFiles(directory=_uploads_dir), name="local-files
 
 app.include_router(document_routes.router, prefix="/api/documents", tags=["documents"])
 app.include_router(chat_routes.router, prefix="/api/chat", tags=["chat"])
+app.include_router(graph_routes.router, prefix="/api/graph", tags=["graph"])
+app.include_router(template_routes.router, prefix="/api/templates", tags=["templates"])
+app.include_router(jurisdiction_routes.router, prefix="/api/jurisdiction", tags=["jurisdiction"])
 
 
 @app.get("/health")

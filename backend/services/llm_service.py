@@ -66,6 +66,24 @@ async def ainvoke_with_fallback(prompt: str | list) -> BaseMessage:
         return await _gemini_llm().ainvoke(prompt)
 
 
+async def astream_with_fallback(prompt: str | list):
+    """Stream tokens from OpenAI; fall back to Gemini on failure.
+
+    Yields string chunks (token fragments).
+    """
+    try:
+        async for chunk in _openai_llm().astream(prompt):
+            text = chunk.content if hasattr(chunk, "content") else str(chunk)
+            if text:
+                yield text
+    except Exception as e:
+        print(f"[llm] OpenAI stream failed ({e!r}) — falling back to Gemini")
+        async for chunk in _gemini_llm().astream(prompt):
+            text = chunk.content if hasattr(chunk, "content") else str(chunk)
+            if text:
+                yield text
+
+
 @lru_cache(maxsize=1)
 def get_embeddings() -> OpenAIEmbeddings:
     if not settings.OPENAI_API_KEY:

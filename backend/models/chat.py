@@ -13,6 +13,7 @@ class ChatRequest(BaseModel):
     question: str
     documentId: Optional[str] = None
     language: Literal["hindi", "english"] = "hindi"
+    state: Optional[str] = None  # Jurisdiction state key (e.g., "maharashtra")
 
 
 class ChatResponse(BaseModel):

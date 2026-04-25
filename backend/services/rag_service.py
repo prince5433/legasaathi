@@ -17,6 +17,7 @@ async def answer_query(
     user_id: str,
     doc_id: str | None = None,
     language: str = "hindi",
+    state: str | None = None,
 ) -> str:
     past = get_memory(user_id, question)
 
@@ -34,6 +35,15 @@ async def answer_query(
         except Exception:
             log.exception("Neo4j graph read failed; continuing")
 
+    # Jurisdiction context
+    jurisdiction_ctx = ""
+    if state:
+        try:
+            from services.jurisdiction_service import get_state_context
+            jurisdiction_ctx = await get_state_context(question, state)
+        except Exception:
+            log.exception("Jurisdiction context failed; continuing")
+
     lang = (
         "Jawab simple Hindi (Devanagari ya Roman dono theek hai) mein do."
         if language == "hindi"
@@ -47,8 +57,12 @@ async def answer_query(
         f"=== User History ===\n{past or '(none)'}\n\n"
         f"=== Document Context ===\n{qdrant_ctx or '(none)'}\n\n"
         f"=== Graph Context ===\n{neo4j_ctx or '(none)'}\n\n"
-        f"=== Question ===\n{question}"
     )
+
+    if jurisdiction_ctx:
+        prompt += f"=== State Law Context ({state}) ===\n{jurisdiction_ctx}\n\n"
+
+    prompt += f"=== Question ===\n{question}"
 
     resp = await ainvoke_with_fallback(prompt)
     answer = resp.content if hasattr(resp, "content") else str(resp)

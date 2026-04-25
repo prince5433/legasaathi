@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { UserButton } from "@clerk/nextjs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Scale } from "lucide-react";
+import { Scale, GitCompareArrows, FileSignature, ArrowRight } from "lucide-react";
 import { DocumentUploader, UploadResult } from "@/components/DocumentUploader";
 import { useApi } from "@/lib/api";
 
@@ -60,6 +60,38 @@ export default function DashboardPage() {
       </nav>
 
       <main className="container space-y-8 py-8">
+        {/* Quick Actions */}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Link href="/dashboard/compare">
+            <Card className="bg-slate-900/50 border-slate-800 backdrop-blur-sm hover:border-amber-500/50 transition-all group cursor-pointer h-full">
+              <CardContent className="pt-6 flex items-center gap-4">
+                <div className="bg-purple-500/10 p-3 rounded-xl border border-purple-500/20 group-hover:scale-110 transition-transform">
+                  <GitCompareArrows className="w-6 h-6 text-purple-400" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white group-hover:text-amber-400 transition-colors">Compare Documents</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Do documents ka AI comparison karein</p>
+                </div>
+                <ArrowRight className="w-5 h-5 text-slate-600 group-hover:text-amber-500 ml-auto transition-colors" />
+              </CardContent>
+            </Card>
+          </Link>
+          <Link href="/dashboard/templates">
+            <Card className="bg-slate-900/50 border-slate-800 backdrop-blur-sm hover:border-amber-500/50 transition-all group cursor-pointer h-full">
+              <CardContent className="pt-6 flex items-center gap-4">
+                <div className="bg-emerald-500/10 p-3 rounded-xl border border-emerald-500/20 group-hover:scale-110 transition-transform">
+                  <FileSignature className="w-6 h-6 text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white group-hover:text-amber-400 transition-colors">Legal Templates</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">RTI, rent notice, complaint — AI draft banaye</p>
+                </div>
+                <ArrowRight className="w-5 h-5 text-slate-600 group-hover:text-amber-500 ml-auto transition-colors" />
+              </CardContent>
+            </Card>
+          </Link>
+        </div>
+
         <section>
           <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">Naya document upload karein</h1>
           <p className="mt-2 text-slate-400">
