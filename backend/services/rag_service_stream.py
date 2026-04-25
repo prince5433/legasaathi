@@ -14,6 +14,7 @@ from services.llm_service import astream_with_fallback
 from services.qdrant_service import search_similar
 from services.neo4j_service import get_related_context
 from services.memory_service import get_memory, save_memory
+from services.rag_context import OUT_OF_CONTEXT, build_document_prompt, load_document_context
 
 log = logging.getLogger("legalsaathi.rag_stream")
 
@@ -36,6 +37,13 @@ async def answer_query_stream(
     # ── Step 1: Memory lookup ──
     yield _sse("status", {"message": "Yaadein dhundh raha hoon..." if language == "hindi" else "Searching memory..."})
     past = get_memory(user_id, question)
+    doc, raw_text = await load_document_context(doc_id, user_id)
+
+    if doc_id and not raw_text:
+        answer = OUT_OF_CONTEXT.get(language, OUT_OF_CONTEXT["hindi"])
+        yield _sse("token", {"content": answer})
+        yield _sse("done", {"full_answer": answer})
+        return
 
     # ── Step 2: Qdrant vector search ──
     yield _sse("status", {"message": "Qdrant mein dhundh raha hoon..." if language == "hindi" else "Searching document chunks..."})
@@ -66,25 +74,17 @@ async def answer_query_stream(
             log.exception("Jurisdiction service failed; continuing without state context")
 
     # ── Step 5: Build prompt ──
-    lang = (
-        "Jawab simple Hindi (Devanagari ya Roman dono theek hai) mein do."
-        if language == "hindi"
-        else "Answer in clear English."
+    prompt = build_document_prompt(
+        question=question,
+        language=language,
+        past=past,
+        qdrant_ctx=qdrant_ctx,
+        neo4j_ctx=neo4j_ctx,
+        jurisdiction_ctx=jurisdiction_ctx,
+        state=state,
+        doc=doc,
+        raw_text=raw_text,
     )
-
-    prompt = (
-        "You are LegalSaathi, a legal assistant for Indian citizens. "
-        f"{lang}\n"
-        "If the context is insufficient, say so honestly.\n\n"
-        f"=== User History ===\n{past or '(none)'}\n\n"
-        f"=== Document Context ===\n{qdrant_ctx or '(none)'}\n\n"
-        f"=== Graph Context ===\n{neo4j_ctx or '(none)'}\n\n"
-    )
-
-    if jurisdiction_ctx:
-        prompt += f"=== State Law Context ===\n{jurisdiction_ctx}\n\n"
-
-    prompt += f"=== Question ===\n{question}"
 
     # ── Step 6: Stream LLM tokens ──
     yield _sse("status", {"message": "Jawab likh raha hoon..." if language == "hindi" else "Generating answer..."})
