@@ -32,3 +32,9 @@ mem0ai==0.1.93
 PyJWT==2.10.1
 cryptography==44.0.0
 slowapi==0.1.9
+
+# Deadline notifier
+apscheduler==3.10.4
+aiosmtplib==3.0.2
+httpx==0.28.1
+python-dateutil==2.9.0.post0

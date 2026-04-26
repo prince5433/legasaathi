@@ -85,6 +85,7 @@
 
 .legal-document-page {
   width: min(100%, 794px);
+  max-width: 100%;
   min-height: 1123px;
   margin: 0 auto;
   padding: 72px 68px;
@@ -95,6 +96,9 @@
   font-size: 15.5px;
   line-height: 1.62;
   letter-spacing: 0;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .legal-document-page h1,
@@ -129,8 +133,8 @@
 .legal-document-page p {
   margin: 0 0 13px;
   color: #111827;
-  white-space: pre-wrap;
   overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .legal-document-page ol,

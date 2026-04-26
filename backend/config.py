@@ -38,5 +38,19 @@ class Settings(BaseSettings):
     CLERK_SECRET_KEY: str = ""
     CLERK_PEM_PUBLIC_KEY: str = ""
 
+    # Deadline notifier
+    ENABLE_DEADLINE_NOTIFIER: bool = True
+    NOTIFIER_INTERVAL_HOURS: int = 6
+    NOTIFIER_LOOKAHEAD_DAYS: int = 30
+    DEV_EMAIL: str = ""
+
+    # SMTP — leave SMTP_HOST blank to disable email sending
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = "LegalSaathi <noreply@legalsaathi.local>"
+    SMTP_USE_TLS: bool = True
+
 
 settings = Settings()

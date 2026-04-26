@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { UserButton } from "@clerk/nextjs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Scale, GitCompareArrows, FileSignature, ArrowRight, Trash2, Loader2 } from "lucide-react";
+import { Scale, GitCompareArrows, FileSignature, ArrowRight, Trash2, Loader2, CalendarClock } from "lucide-react";
 import { DocumentUploader, UploadResult } from "@/components/DocumentUploader";
+import { DeadlinesWidget } from "@/components/DeadlinesWidget";
 import { useApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 
@@ -84,7 +85,7 @@ export default function DashboardPage() {
 
       <main className="container space-y-8 py-8">
         {/* Quick Actions */}
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Link href="/dashboard/compare">
             <Card className="bg-slate-900/50 border-slate-800 backdrop-blur-sm hover:border-amber-500/50 transition-all group cursor-pointer h-full">
               <CardContent className="pt-6 flex items-center gap-4">
@@ -113,7 +114,24 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
           </Link>
+          <Link href="/dashboard/deadlines">
+            <Card className="bg-slate-900/50 border-slate-800 backdrop-blur-sm hover:border-amber-500/50 transition-all group cursor-pointer h-full">
+              <CardContent className="pt-6 flex items-center gap-4">
+                <div className="bg-amber-500/10 p-3 rounded-xl border border-amber-500/20 group-hover:scale-110 transition-transform">
+                  <CalendarClock className="w-6 h-6 text-amber-400" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white group-hover:text-amber-400 transition-colors">Deadlines</h3>
+                  <p className="text-xs text-slate-400 mt-0.5">Auto reminders 7d/3d/1d before any date</p>
+                </div>
+                <ArrowRight className="w-5 h-5 text-slate-600 group-hover:text-amber-500 ml-auto transition-colors" />
+              </CardContent>
+            </Card>
+          </Link>
         </div>
+
+        {/* Upcoming deadlines preview */}
+        <DeadlinesWidget />
 
         <section>
           <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">Naya document upload karein</h1>

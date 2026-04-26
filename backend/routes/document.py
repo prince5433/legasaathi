@@ -28,6 +28,7 @@ from services.timeline_service import extract_timeline
 from services.comparison_service import compare_documents
 from services.neo4j_service import get_driver
 from services.qdrant_service import delete_document_chunks
+from services import deadline_service
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
@@ -110,6 +111,19 @@ async def upload_document(
         }},
     )
 
+    # Extract timeline once, cache it on the document, and register reminders.
+    try:
+        events = await extract_timeline(raw_text)
+        await col.update_one(
+            {"_id": insert_result.inserted_id},
+            {"$set": {"timeline": events}},
+        )
+        await deadline_service.register_deadlines_from_events(
+            user_id, doc_id, filename, events,
+        )
+    except Exception:
+        log.exception("Timeline + deadline extraction failed for doc %s", doc_id)
+
     return {
         "docId": doc_id,
         "fileName": filename,
@@ -170,6 +184,11 @@ async def delete_document(doc_id: str, user_id: str = Depends(verify_clerk)):
         raise HTTPException(404, "Document not found")
 
     await get_chats_col().delete_one({"userId": user_id, "documentId": doc_id})
+
+    try:
+        await deadline_service.delete_for_document(user_id, doc_id)
+    except Exception:
+        log.exception("Reminder cleanup failed for deleted doc %s", doc_id)
 
     try:
         await delete_document_chunks(doc_id)

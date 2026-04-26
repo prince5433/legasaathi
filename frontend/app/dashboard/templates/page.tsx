@@ -15,7 +15,6 @@ import {
   ArrowRight,
   FileSignature,
   Loader2,
-  Download,
   FileDown,
   Check,
   ChevronRight,
@@ -177,16 +176,6 @@ export default function TemplatesPage() {
       setGenerating(false);
     }
   }, [api, selectedType, language, formData]);
-
-  const downloadAsText = useCallback(() => {
-    const blob = new Blob([generatedContent], { type: "text/markdown" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${generatedTitle.replace(/\s+/g, "_")}.md`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [generatedContent, generatedTitle]);
 
   const downloadAsPdf = useCallback(() => {
     const iframe = document.createElement("iframe");
@@ -389,7 +378,7 @@ export default function TemplatesPage() {
                   {typeIcons[selectedType.type]}
                 </span>
                 {selectedType.name}
-                <button onClick={resetWizard} className="ml-auto text-xs text-slate-500 hover:text-white">
+                <button type="button" onClick={resetWizard} className="ml-auto text-xs text-slate-500 hover:text-white">
                   ← Change template
                 </button>
               </CardTitle>
@@ -399,6 +388,7 @@ export default function TemplatesPage() {
               <div className="flex items-center gap-3 mb-4">
                 <span className="text-xs text-muted-foreground">Language:</span>
                 <select
+                  aria-label="Language"
                   value={language}
                   onChange={(e) => setLanguage(e.target.value as "hindi" | "english")}
                   className="rounded-md border border-slate-700 bg-slate-800 px-2 py-1 text-sm"
@@ -423,6 +413,7 @@ export default function TemplatesPage() {
                     />
                   ) : field.type === "select" ? (
                     <select
+                      aria-label={field.label}
                       value={formData[field.key] || ""}
                       onChange={(e) => setFormData((prev) => ({ ...prev, [field.key]: e.target.value }))}
                       className="w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-sm"
@@ -482,10 +473,6 @@ export default function TemplatesPage() {
                     "Copy Text"
                   )}
                 </Button>
-                <Button variant="outline" size="sm" onClick={downloadAsText}>
-                  <Download className="w-4 h-4 mr-1" />
-                  Download .md
-                </Button>
                 <Button variant="outline" size="sm" onClick={downloadAsPdf}>
                   <FileDown className="w-4 h-4 mr-1" />
                   Download PDF
@@ -505,20 +492,13 @@ export default function TemplatesPage() {
                 {!startsWithMarkdownTitle(generatedContent) && (
                   <h1>{generatedTitle || "Legal Document"}</h1>
                 )}
-                <ReactMarkdown
-                  components={{
-                    h1: ({ children }) => <h1>{children}</h1>,
-                    h2: ({ children }) => <h2>{children}</h2>,
-                    h3: ({ children }) => <h3>{children}</h3>,
-                    p: ({ children }) => <p>{children}</p>,
-                    ol: ({ children }) => <ol>{children}</ol>,
-                    ul: ({ children }) => <ul>{children}</ul>,
-                    li: ({ children }) => <li>{children}</li>,
-                    strong: ({ children }) => <strong>{children}</strong>,
+                {/* Use the same renderer as the PDF download — react-markdown is
+                    unreliable for `**bold**` next to Devanagari punctuation. */}
+                <div
+                  dangerouslySetInnerHTML={{
+                    __html: markdownToPrintableHtml(generatedContent),
                   }}
-                >
-                  {generatedContent}
-                </ReactMarkdown>
+                />
               </article>
             </div>
           </div>
