@@ -73,12 +73,16 @@ def get_presigned_url(key: str, expiry_s: int = 3600) -> str:
         ExpiresIn=expiry_s,
     )
 
+
 def presign_file_url(file_url: str) -> str:
     """If file_url is an S3 URL, return a presigned URL; otherwise return as-is."""
     if not file_url:
         return file_url
     prefix = ".amazonaws.com/"
     if prefix in file_url:
+        if not _have_aws():
+            # AWS keys not configured — return original URL as-is
+            return file_url
         key = file_url.split(prefix, 1)[1]
         return get_presigned_url(key)
     return file_url
