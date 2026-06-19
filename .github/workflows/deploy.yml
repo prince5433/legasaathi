@@ -1,0 +1,107 @@
+name: 🚀 Deploy LegalSaathi to AWS EC2
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:  # Manual trigger bhi kar sakte ho GitHub UI se
+
+jobs:
+  deploy:
+    name: 🚀 Deploy to EC2
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: 📦 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🔐 Setup SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: 🚀 Deploy to EC2
+        env:
+          HOST: ${{ secrets.EC2_HOST }}
+          USER: ${{ secrets.EC2_USER }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no $USER@$HOST << 'DEPLOY_SCRIPT'
+
+          set -e  # Koi bhi command fail ho toh script ruk jaaye
+
+          echo "========================================="
+          echo "🚀 Starting LegalSaathi Deployment..."
+          echo "Time: $(date '+%Y-%m-%d %H:%M:%S')"
+          echo "========================================="
+
+          cd /home/ubuntu/legalsaathi
+
+          # Step 1: Latest code pull karo
+          echo ""
+          echo "📥 Step 1/6: Pulling latest code..."
+          git fetch origin main
+          git reset --hard origin/main
+
+          # Step 2: Docker images rebuild karo
+          echo ""
+          echo "🔨 Step 2/6: Building Docker images..."
+          docker compose -f docker-compose.prod.yml build
+
+          # Step 3: Containers restart karo (zero-downtime approach)
+          # --remove-orphans: purane containers hatao agar service remove hui ho
+          echo ""
+          echo "♻️  Step 3/6: Restarting containers..."
+          docker compose -f docker-compose.prod.yml up -d --remove-orphans
+
+          # Step 4: Old unused images clean karo (disk space bachao)
+          echo ""
+          echo "🧹 Step 4/6: Cleaning up old images..."
+          docker image prune -f
+
+          # Step 5: Wait for backend to be ready
+          echo ""
+          echo "⏳ Step 5/6: Waiting for backend to start..."
+          MAX_RETRIES=15
+          RETRY_COUNT=0
+          until curl -sf http://localhost:8000/health > /dev/null 2>&1; do
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+            if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+              echo "❌ Backend failed to start after $MAX_RETRIES attempts!"
+              echo "--- Backend Logs ---"
+              docker compose -f docker-compose.prod.yml logs --tail=50 backend
+              exit 1
+            fi
+            echo "  Attempt $RETRY_COUNT/$MAX_RETRIES — waiting 5s..."
+            sleep 5
+          done
+
+          # Step 6: Health check
+          echo ""
+          echo "🏥 Step 6/6: Running health checks..."
+
+          HEALTH_RESPONSE=$(curl -s http://localhost:8000/health)
+          echo "  Backend: $HEALTH_RESPONSE"
+
+          FRONTEND_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000)
+          echo "  Frontend: HTTP $FRONTEND_STATUS"
+
+          if [ "$FRONTEND_STATUS" = "200" ]; then
+            echo ""
+            echo "========================================="
+            echo "🎉 Deployment SUCCESSFUL!"
+            echo "Time: $(date '+%Y-%m-%d %H:%M:%S')"
+            echo "========================================="
+          else
+            echo ""
+            echo "⚠️  Backend OK but Frontend returned HTTP $FRONTEND_STATUS"
+            echo "  (Frontend may still be starting up...)"
+            echo "========================================="
+          fi
+
+          DEPLOY_SCRIPT
+
+      - name: 🧹 Cleanup SSH Key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
