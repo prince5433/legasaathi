@@ -18,14 +18,14 @@ jobs:
       - name: 🔐 Setup SSH Key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/deploy_key
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+          ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts 2>/dev/null
 
       - name: 🚀 Deploy to EC2
         env:
-          HOST: ${{ secrets.EC2_HOST }}
-          USER: ${{ secrets.EC2_USER }}
+          HOST: ${{ secrets.SERVER_IP }}
+          USER: ${{ secrets.SERVER_USER }}
         run: |
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no $USER@$HOST << 'DEPLOY_SCRIPT'
 
@@ -36,7 +36,7 @@ jobs:
           echo "Time: $(date '+%Y-%m-%d %H:%M:%S')"
           echo "========================================="
 
-          cd /home/ubuntu/legalsaathi
+          cd /home/ubuntu/legasaathi
 
           # Step 1: Latest code pull karo
           echo ""
