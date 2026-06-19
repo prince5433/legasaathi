@@ -72,51 +72,69 @@ async def store_entities(entities: dict, doc_id: str) -> None:
             doc_type=doc_type,
         )
         for party in entities.get("parties") or []:
+            name = party.get("name") if isinstance(party, dict) else party
+            if not name:
+                continue
             await session.run(
                 "MERGE (p:Party {name: $name}) "
                 "WITH p MATCH (d:Document {id: $doc_id}) "
                 "MERGE (d)-[:HAS_PARTY]->(p)",
-                name=party,
+                name=str(name),
                 doc_id=doc_id,
             )
         for person in entities.get("persons") or []:
+            name = person.get("name") if isinstance(person, dict) else person
+            if not name:
+                continue
             await session.run(
                 "MERGE (p:Person {name: $name}) "
                 "WITH p MATCH (d:Document {id: $doc_id}) "
                 "MERGE (d)-[:MENTIONS]->(p)",
-                name=person,
+                name=str(name),
                 doc_id=doc_id,
             )
         for section in entities.get("sections") or []:
+            name = section.get("name") if isinstance(section, dict) else section
+            if not name:
+                continue
             await session.run(
                 "MERGE (s:Section {name: $section}) "
                 "WITH s MATCH (d:Document {id: $doc_id}) "
                 "MERGE (d)-[:CITES]->(s)",
-                section=section,
+                section=str(name),
                 doc_id=doc_id,
             )
         for clause in entities.get("clauses") or []:
+            name = clause.get("name") if isinstance(clause, dict) else clause
+            if not name:
+                continue
             await session.run(
                 "MERGE (c:Section {name: $clause}) "
                 "WITH c MATCH (d:Document {id: $doc_id}) "
                 "MERGE (d)-[:HAS_CLAUSE]->(c)",
-                clause=clause,
+                clause=str(name),
                 doc_id=doc_id,
             )
         for date in entities.get("dates") or []:
+            name = date.get("name") if isinstance(date, dict) else date
+            if not name:
+                continue
             await session.run(
                 "MERGE (dt:Date {name: $date}) "
                 "WITH dt MATCH (d:Document {id: $doc_id}) "
                 "MERGE (d)-[:HAS_DATE]->(dt)",
-                date=date,
+                date=str(name),
                 doc_id=doc_id,
             )
         for amount in entities.get("amounts") or []:
+            name = amount.get("name") if isinstance(amount, dict) else amount
+            if not name:
+                continue
             await session.run(
                 "MERGE (a:Amount {name: $amount}) "
                 "WITH a MATCH (d:Document {id: $doc_id}) "
                 "MERGE (d)-[:HAS_AMOUNT]->(a)",
-                amount=amount,
+                amount=str(name),
                 doc_id=doc_id,
             )
 
